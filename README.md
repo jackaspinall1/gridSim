@@ -18,14 +18,14 @@ This simulation tool provides a comprehensive analysis of the UK electricity gri
 
 ### Component-Based Demand Model
 
-The tool uses a sophisticated demand model that breaks down electricity consumption into four key components:
+The tool uses a demand model that breaks down electricity consumption into four key components:
 
 1. **Baseload**: Traditional non-electrified demand (slow growth: 40-44 GW peak)
 2. **Heat Pumps**: Rapid electrification of heating (2-18 GW peak by 2035)
 3. **EV Charging**: Electric vehicle charging demand (3-20 GW peak by 2035)
 4. **Behind-the-Meter Solar**: Rooftop solar generation that reduces apparent demand (5-15 GW capacity)
 
-Each component has seasonal profiles (winter, summer, shoulder) that reflect realistic usage patterns throughout the day.
+Each component has seasonal profiles (winter, summer, shoulder) that reflect realistic usage patterns throughout the day. Changes in these align with government targets.
 
 ### Generation Sources
 
@@ -46,24 +46,24 @@ The simulation models 10 generation technologies:
 
 Two storage technologies are modeled with realistic characteristics:
 
-- **Pumped Hydro**: 75% efficiency, asymmetric charge/discharge (30% of power capacity, 70% of energy capacity)
-- **Batteries**: 85% efficiency, symmetric charge/discharge (70% of power capacity, 30% of energy capacity)
+- **Pumped Hydro**: 75% efficiency, asymmetric charge/discharge (30% of total power capacity, 70% of total energy capacity)
+- **Batteries**: 85% efficiency, symmetric charge/discharge (70% of total power capacity, 30% of total energy capacity)
 
 ### Weather Scenarios
 
 Two extreme weather scenarios are included:
 
 1. **Dunkelflaute** (Winter):
-   - Low wind (10% offshore, 5% onshore)
-   - Low solar (10% peak, 8-hour daylight)
+   - Low wind (Load factors of 10% offshore, 5% onshore)
+   - Low solar (Load factors of 10% peak, 8-hour daylight)
    - High demand (winter heating)
    - Limited interconnector imports (10%)
 
 2. **Summer Windy** (Summer):
-   - High wind (85% offshore, 75% onshore)
-   - High solar (80% peak, 16-hour daylight)
+   - High wind (Load factors of 85% offshore, 75% onshore)
+   - High solar (Load factors of 80% peak, 16-hour daylight)
    - Lower demand (summer cooling)
-   - Export capability (0% imports, potential exports)
+   - Export capability (0% imports, potential exports). Set to be neutral on excess capacity; likely Europe also has excess as energy policy and weather are similar.
 
 ## Installation
 
@@ -164,6 +164,7 @@ Generation is dispatched in priority order:
 8. Gas CCGT
 9. Gas OCGT
 10. Gas/Oil Peakers
+11. Storage (Used as last resort to test energy security in the limit)
 
 ### Surplus Handling
 
@@ -211,7 +212,7 @@ The simulation tracks:
 
 - Simplified 96-hour simulation (4 days) - not a full year analysis
 - Fixed seasonal profiles (winter/summer) - no daily weather variation
-- Linear interpolation between milestone years
+- Linear interpolation between milestone years (2025, 2030, 2035)
 - Storage starts at full capacity (no initialization period)
 - No transmission constraints or grid stability modeling
 - Interconnectors modeled as simple import/export (no directional constraints)
@@ -219,6 +220,9 @@ The simulation tracks:
 ## Future Enhancements
 
 Potential improvements could include:
+- Stochastic failure of power plants based on age
+- Modified grid assets based on infrastructure buildout delays - update dynamically from data portal.
+- Enhanced storage deployment algorithms. - Currently set to last resort as energy security test.
 - Full year simulation with daily weather variation
 - More granular demand components (industrial, commercial)
 - Transmission network constraints
@@ -229,7 +233,9 @@ Potential improvements could include:
 
 ## License
 
-This tool is provided for educational and research purposes.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+The MIT License is a very permissive open-source license that allows all usage including commercial use, modification, distribution, and private use, with minimal restrictions.
 
 ## Contact
 
