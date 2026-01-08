@@ -4,19 +4,21 @@ import numpy as np
 from matplotlib.widgets import Slider, RadioButtons, TextBox
 
 # --- 1. DATA & ROADMAP ---
-# Based on current 2026 UK energy strategy projections
+# Based on NESO FES 2024 and Clean Power 2030 Action Plan
 roadmap_milestones = {
     'Year': [2025, 2030, 2035],
-    'Nuclear': [5.88, 5.0, 8.0],
-    'Solar': [15.7, 45.0, 70.0],
+    'Nuclear': [5.88, 6.5, 11.0],           # 2030: Hinkley C operational, 2035: + Sizewell C
+    'Solar': [15.7, 45.0, 62.0],            # NESO targets: 47 GW (2030), 62 GW (2035)
     'Hydro_RunOfRiver': [1.47, 1.5, 1.5],
-    'Wind_Offshore': [15.5, 30.0, 60.0],
-    'Wind_Onshore': [15.2, 22.0, 30.0],
+    'Wind_Offshore': [15.5, 45.0, 75.0],    # NESO targets: 43-50 GW (2030), 68-86 GW (2035)
+    'Wind_Onshore': [15.2, 27.0, 36.0],     # NESO targets: 27 GW (2030), 35-37 GW (2035)
     'Biomass': [4.8, 4.0, 3.5],
     'Interconnectors': [10.8, 18.0, 22.0],
-    'Gas_total': [33.0, 35.0, 15.0],
-    'Storage_Power': [10.8, 25.0, 45.0],
-    'Storage_Energy': [42.5, 120.0, 250.0]
+    'Gas_CCGT': [30.5, 32.0, 9.0],          # Combined Cycle Gas Turbines - major retirement by 2035
+    'Gas_OCGT': [2.4, 2.5, 2.5],            # Open Cycle Gas Turbines - peaking plants
+    'Gas_Oil': [0.1, 0.5, 0.5],             # Oil peaker plants for backup
+    'Storage_Power': [10.8, 25.0, 45.0],    # Battery + pumped hydro power capacity
+    'Storage_Energy': [42.5, 120.0, 250.0]  # Battery + pumped hydro energy capacity (GWh)
 }
 
 df_milestones = pd.DataFrame(roadmap_milestones).set_index('Year')
@@ -24,8 +26,8 @@ years_range = np.arange(2025, 2036)
 df_fleet = df_milestones.reindex(years_range).interpolate()
 
 weather_scenarios = {
-    'Dunkelflaute': {'Wind_Off': 0.10, 'Wind_On': 0.05, 'Solar_Peak': 0.10, 'Demand_Mult': 1.0, 'Solar_Start': 8, 'Solar_Hours': 8},  # Winter: 8am-4pm (8 hours)
-    'Summer Windy': {'Wind_Off': 0.85, 'Wind_On': 0.75, 'Solar_Peak': 0.80, 'Demand_Mult': 0.7, 'Solar_Start': 5, 'Solar_Hours': 16}  # Summer: 5am-9pm (16 hours)
+    'Dunkelflaute': {'Wind_Off': 0.10, 'Wind_On': 0.05, 'Solar_Peak': 0.10, 'Demand_Mult': 1.0, 'Solar_Start': 8, 'Solar_Hours': 8, 'Interconnectors': 0.1},  # Winter: 8am-4pm (8 hours), imports from EU
+    'Summer Windy': {'Wind_Off': 0.85, 'Wind_On': 0.75, 'Solar_Peak': 0.80, 'Demand_Mult': 0.7, 'Solar_Start': 5, 'Solar_Hours': 16, 'Interconnectors': 0.0}  # Summer: 5am-9pm (16 hours), exporting to EU
 }
 
 # --- COMPONENT-BASED DEMAND MODEL ---
@@ -243,7 +245,7 @@ def run_sim(year, weather_key, cap_override=None, lf_override=None, storage_over
     renewable_sources = ['Solar', 'Wind_Offshore', 'Wind_Onshore', 'Hydro_RunOfRiver']
 
     if lf_override is None:
-        lfs = {'Nuclear': 0.90, 'Solar_Peak': w['Solar_Peak'], 'Hydro_RunOfRiver': 0.80, 'Wind_Offshore': w['Wind_Off'], 'Wind_Onshore': w['Wind_On'], 'Biomass': 0.95, 'Interconnectors': 0.05, 'Gas_total': 1.0}
+        lfs = {'Nuclear': 0.90, 'Solar_Peak': w['Solar_Peak'], 'Hydro_RunOfRiver': 0.80, 'Wind_Offshore': w['Wind_Off'], 'Wind_Onshore': w['Wind_On'], 'Biomass': 0.95, 'Interconnectors': w['Interconnectors'], 'Gas_CCGT': 1.0, 'Gas_OCGT': 1.0, 'Gas_Oil': 1.0}
     else:
         lfs = lf_override.copy()
 
@@ -261,7 +263,7 @@ def run_sim(year, weather_key, cap_override=None, lf_override=None, storage_over
         
         storage_dispatch = {'Pumped_Hydro': 0, 'Batteries': 0}
         actual_gen = {s: 0 for s in gen_pot}
-        priority = ['Nuclear', 'Solar', 'Hydro_RunOfRiver', 'Wind_Offshore', 'Wind_Onshore', 'Biomass', 'Interconnectors', 'Gas_total']
+        priority = ['Nuclear', 'Solar', 'Hydro_RunOfRiver', 'Wind_Offshore', 'Wind_Onshore', 'Biomass', 'Interconnectors', 'Gas_CCGT', 'Gas_OCGT', 'Gas_Oil']
         
         total_charged_this_hour = 0
         total_discharged_this_hour = 0
@@ -351,7 +353,7 @@ ax_slider = plt.axes([0.10, 0.03, 0.35, 0.02])
 slider = Slider(ax_slider, 'Year', 2025, 2035, valinit=2025, valstep=1)
 
 # Weather radio buttons - positioned in right panel below color key
-ax_radio = plt.axes([0.70, 0.63, 0.12, 0.08])
+ax_radio = plt.axes([0.70, 0.54, 0.12, 0.08])
 radio = RadioButtons(ax_radio, ('Dunkelflaute', 'Summer Windy'))
 
 # Create Excel-like grid tables for parameters
@@ -366,7 +368,9 @@ gen_rows = [
     ('Wind Onshore', 'Wind_Onshore', 'Wind_Onshore'),
     ('Biomass', 'Biomass', 'Biomass'),
     ('Interconnect', 'Interconnectors', 'Interconnectors'),
-    ('Gas Total', 'Gas_total', 'Gas_total'),
+    ('Gas CCGT', 'Gas_CCGT', 'Gas_CCGT'),
+    ('Gas OCGT', 'Gas_OCGT', 'Gas_OCGT'),
+    ('Oil Peakers', 'Gas_Oil', 'Gas_Oil'),
 ]
 
 # Define storage rows: (label, storage_type)
@@ -377,13 +381,13 @@ storage_rows = [
 
 # Grid table positions (in right panel, below weather selector)
 # Right panel spans from x=0.68 to x=0.98
-gen_table_top = 0.47
-storage_table_top = 0.22
+gen_table_top = 0.43
+storage_table_top = 0.12  # Consistent spacing with generation table
 table_left = 0.77  # Start of first data column
-row_height = 0.024  # Row spacing (20% bigger than 0.020)
+row_height = 0.024  # Row spacing
 col_width = 0.09   # Column width
 col_gap = 0.01     # Gap between columns
-textbox_height = 0.018  # Height of textboxes (20% bigger than 0.015)
+textbox_height = 0.018  # Height of textboxes
 
 # Create GENERATION table textboxes
 for idx, (label, cap_param, lf_param) in enumerate(gen_rows):
@@ -445,8 +449,8 @@ def update_simulation_from_textboxes(event=None):
 
     ax1.clear(); ax2.clear(); ax3.clear()
 
-    sources = ['Nuclear', 'Solar', 'Hydro_RunOfRiver', 'Wind_Offshore', 'Wind_Onshore', 'Biomass', 'Interconnectors', 'Gas_total', 'Pumped_Hydro', 'Batteries']
-    colors = ['#ff4444', '#ffcc5c', '#6b4226', '#2ab7ca', '#005b96', '#b3c100', '#a3a3a3', '#555555', '#4a90e2', '#f8e71c']
+    sources = ['Nuclear', 'Solar', 'Hydro_RunOfRiver', 'Wind_Offshore', 'Wind_Onshore', 'Biomass', 'Interconnectors', 'Gas_CCGT', 'Gas_OCGT', 'Gas_Oil', 'Pumped_Hydro', 'Batteries']
+    colors = ['#ff4444', '#ffcc5c', '#6b4226', '#2ab7ca', '#005b96', '#b3c100', '#a3a3a3', '#555555', '#888888', '#3d3d3d', '#4a90e2', '#f8e71c']
 
     # Graph 1: Generation stack (no legend on graph)
     ax1.stackplot(hours, [df[s] for s in sources], labels=sources, colors=colors, alpha=0.8)
@@ -471,7 +475,18 @@ def update_simulation_from_textboxes(event=None):
     ax3.fill_between(hours, residual_excess, 0, where=(np.array(residual_excess) < 0), color='#e74c3c', alpha=0.5, label='Unmet Demand')
     ax3.axhline(0, color='black', lw=1, ls='-')
     ax3.set_ylabel("Residual Cap. (GW)", fontsize=10)
-    ax3.set_xlabel("Hours (96h Scenario)", fontsize=10)
+    ax3.set_xlabel("Time (4-Day Scenario)", fontsize=10)
+
+    # Set x-axis to show times of day with day markers
+    tick_positions = list(range(0, 96, 12))  # Every 12 hours (midnight and noon)
+    tick_labels = []
+    for hour in tick_positions:
+        day = (hour // 24) + 1
+        hour_of_day = hour % 24
+        tick_labels.append(f"D{day} {hour_of_day:02d}:00")
+
+    ax3.set_xticks(tick_positions)
+    ax3.set_xticklabels(tick_labels, rotation=45, ha='right', fontsize=8)
     ax3.legend(loc='upper left', fontsize=8)
     ax3.grid(True, alpha=0.3)
 
@@ -493,7 +508,9 @@ def update_textboxes_from_sliders(val):
     textboxes[('Wind_Onshore', 'cap')].set_val(f"{cap['Wind_Onshore']:.2f}")
     textboxes[('Biomass', 'cap')].set_val(f"{cap['Biomass']:.2f}")
     textboxes[('Interconnectors', 'cap')].set_val(f"{cap['Interconnectors']:.2f}")
-    textboxes[('Gas_total', 'cap')].set_val(f"{cap['Gas_total']:.2f}")
+    textboxes[('Gas_CCGT', 'cap')].set_val(f"{cap['Gas_CCGT']:.2f}")
+    textboxes[('Gas_OCGT', 'cap')].set_val(f"{cap['Gas_OCGT']:.2f}")
+    textboxes[('Gas_Oil', 'cap')].set_val(f"{cap['Gas_Oil']:.2f}")
 
     # Update storage textboxes (split from total Storage_Power and Storage_Energy)
     textboxes[('Pumped_Hydro', 'power')].set_val(f"{cap['Storage_Power'] * 0.3:.2f}")
@@ -508,8 +525,10 @@ def update_textboxes_from_sliders(val):
     textboxes[('Wind_Offshore', 'lf')].set_val(f"{w['Wind_Off']:.2f}")
     textboxes[('Wind_Onshore', 'lf')].set_val(f"{w['Wind_On']:.2f}")
     textboxes[('Biomass', 'lf')].set_val("0.95")
-    textboxes[('Interconnectors', 'lf')].set_val("0.05")
-    textboxes[('Gas_total', 'lf')].set_val("1.00")
+    textboxes[('Interconnectors', 'lf')].set_val(f"{w['Interconnectors']:.2f}")
+    textboxes[('Gas_CCGT', 'lf')].set_val("1.00")
+    textboxes[('Gas_OCGT', 'lf')].set_val("1.00")
+    textboxes[('Gas_Oil', 'lf')].set_val("1.00")
 
     # Don't auto-update simulation - wait for user to press Enter
 
@@ -525,8 +544,10 @@ def update_load_factors_from_weather(val):
     textboxes[('Wind_Offshore', 'lf')].set_val(f"{w['Wind_Off']:.2f}")
     textboxes[('Wind_Onshore', 'lf')].set_val(f"{w['Wind_On']:.2f}")
     textboxes[('Biomass', 'lf')].set_val("0.95")
-    textboxes[('Interconnectors', 'lf')].set_val("0.05")
-    textboxes[('Gas_total', 'lf')].set_val("1.00")
+    textboxes[('Interconnectors', 'lf')].set_val(f"{w['Interconnectors']:.2f}")
+    textboxes[('Gas_CCGT', 'lf')].set_val("1.00")
+    textboxes[('Gas_OCGT', 'lf')].set_val("1.00")
+    textboxes[('Gas_Oil', 'lf')].set_val("1.00")
 
     # Re-run simulation with updated load factors
     update_simulation_from_textboxes()
@@ -537,15 +558,15 @@ def update_load_factors_from_weather(val):
 # Add color key / legend at top
 fig.text(0.69, 0.93, 'COLOR KEY', fontsize=11, weight='bold')
 
-sources = ['Nuclear', 'Solar', 'Hydro_RunOfRiver', 'Wind_Offshore', 'Wind_Onshore', 'Biomass', 'Interconnectors', 'Gas_total', 'Pumped_Hydro', 'Batteries']
-colors = ['#ff4444', '#ffcc5c', '#6b4226', '#2ab7ca', '#005b96', '#b3c100', '#a3a3a3', '#555555', '#4a90e2', '#f8e71c']
-source_labels = ['Nuclear', 'Solar', 'Hydro', 'Wind Off.', 'Wind On.', 'Biomass', 'Intercon.', 'Gas', 'Pmp Hydro', 'Batteries']
+sources = ['Nuclear', 'Solar', 'Hydro_RunOfRiver', 'Wind_Offshore', 'Wind_Onshore', 'Biomass', 'Interconnectors', 'Gas_CCGT', 'Gas_OCGT', 'Gas_Oil', 'Pumped_Hydro', 'Batteries']
+colors = ['#ff4444', '#ffcc5c', '#6b4226', '#2ab7ca', '#005b96', '#b3c100', '#a3a3a3', '#555555', '#888888', '#3d3d3d', '#4a90e2', '#f8e71c']
+source_labels = ['Nuclear', 'Solar', 'Hydro', 'Wind Off.', 'Wind On.', 'Biomass', 'Intercon.', 'CCGT', 'OCGT', 'Oil', 'Pmp Hydro', 'Batteries']
 
 legend_y_start = 0.89
 legend_spacing = 0.033
 for idx, (label, color) in enumerate(zip(source_labels, colors)):
-    y_pos = legend_y_start - (idx % 5) * legend_spacing
-    x_pos = 0.69 if idx < 5 else 0.84
+    y_pos = legend_y_start - (idx % 6) * legend_spacing
+    x_pos = 0.69 if idx < 6 else 0.84
     # Color box
     rect = plt.Rectangle((x_pos, y_pos - 0.008), 0.015, 0.020, color=color, alpha=0.8, transform=fig.transFigure, clip_on=False)
     fig.patches.append(rect)
@@ -553,13 +574,13 @@ for idx, (label, color) in enumerate(zip(source_labels, colors)):
     fig.text(x_pos + 0.018, y_pos, label, fontsize=8, va='center')
 
 # Weather selector label
-fig.text(0.69, 0.72, 'WEATHER', fontsize=10, weight='bold')
+fig.text(0.69, 0.64, 'WEATHER', fontsize=10, weight='bold')
 
 # Add GENERATION table header
-fig.text(0.69, 0.52, 'GENERATION', fontsize=11, weight='bold')
-fig.text(0.69, 0.49, 'Source', fontsize=9, weight='bold')
-fig.text(0.775, 0.49, 'Cap (GW)', fontsize=9, weight='bold')
-fig.text(0.875, 0.49, 'Load Factor', fontsize=9, weight='bold')
+fig.text(0.69, 0.48, 'GENERATION', fontsize=11, weight='bold')
+fig.text(0.69, 0.45, 'Source', fontsize=9, weight='bold')
+fig.text(0.775, 0.45, 'Cap (GW)', fontsize=9, weight='bold')
+fig.text(0.875, 0.45, 'Load Factor', fontsize=9, weight='bold')
 
 # Add row labels for generation table
 for idx, (label, cap_param, lf_param) in enumerate(gen_rows):
@@ -567,10 +588,10 @@ for idx, (label, cap_param, lf_param) in enumerate(gen_rows):
     fig.text(0.69, y_pos, label, fontsize=8, va='center')
 
 # Add STORAGE table header (below generation table)
-fig.text(0.69, 0.27, 'STORAGE', fontsize=11, weight='bold')
-fig.text(0.69, 0.24, 'Asset', fontsize=9, weight='bold')
-fig.text(0.77, 0.24, 'Power (GW)', fontsize=9, weight='bold')
-fig.text(0.87, 0.24, 'Energy (GWh)', fontsize=9, weight='bold')
+fig.text(0.69, 0.17, 'STORAGE', fontsize=11, weight='bold')
+fig.text(0.69, 0.14, 'Asset', fontsize=9, weight='bold')
+fig.text(0.77, 0.14, 'Power (GW)', fontsize=9, weight='bold')
+fig.text(0.87, 0.14, 'Energy (GWh)', fontsize=9, weight='bold')
 
 # Add row labels for storage table
 for idx, (label, storage_type) in enumerate(storage_rows):
@@ -588,5 +609,21 @@ for tb in textboxes.values():
 # Initial setup - populate textboxes and run first simulation
 update_textboxes_from_sliders(None)
 update_simulation_from_textboxes()
+
+# Maximize window on startup
+mng = plt.get_current_fig_manager()
+try:
+    # Try TkAgg backend method
+    mng.window.state('zoomed')
+except:
+    try:
+        # Try Qt backend method
+        mng.window.showMaximized()
+    except:
+        try:
+            # Try macOS backend method
+            mng.full_screen_toggle()
+        except:
+            pass  # If all fail, just show normally
 
 plt.show()
